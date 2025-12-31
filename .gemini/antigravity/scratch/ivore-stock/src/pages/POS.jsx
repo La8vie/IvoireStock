@@ -53,7 +53,8 @@ const POS = () => {
                 quantity: item.quantity,
                 price: item.price
             })),
-            ...paymentDetails
+            ...paymentDetails,
+            changeGiven: paymentDetails.change || 0
         };
 
         await addSale(saleData);

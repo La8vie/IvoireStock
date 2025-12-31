@@ -15,9 +15,16 @@ export function useSales() {
                     await db.products.update(item.productId, { stock: product.stock - item.quantity });
                 }
             }
-            await db.sales.add(saleData);
-
             const session = JSON.parse(localStorage.getItem('ivoire_stock_session'));
+            const fullSaleData = {
+                ...saleData,
+                userId: session?.id,
+                username: session?.username,
+                timestamp: new Date()
+            };
+
+            await db.sales.add(fullSaleData);
+
             if (session) {
                 await db.logs.add({
                     userId: session.id,

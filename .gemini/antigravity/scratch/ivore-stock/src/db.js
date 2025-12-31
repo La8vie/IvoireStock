@@ -2,9 +2,9 @@ import Dexie from 'dexie';
 
 export const db = new Dexie('IvoireStockDB');
 
-db.version(5).stores({
+db.version(6).stores({
     products: '++id, name, barcode, price, stock, minStock, category, unit',
-    sales: '++id, date, total, paymentMethod, items',
+    sales: '++id, date, total, paymentMethod, items, userId, username, changeGiven',
     settings: 'key, value',
     users: '++id, username, password, role, permissions',
     invites: '++id, code, role, status, permissions',

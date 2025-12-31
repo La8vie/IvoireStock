@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { UserPlus, Trash2, Key, ListFilter, Info, Shield, CheckCircle, XCircle } from 'lucide-react';
+import UserStats from '../components/UserStats';
+import { UserPlus, Trash2, Key, ListFilter, Info, Shield, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
 
 const Settings = () => {
     const users = useLiveQuery(() => db.users.toArray()) || [];
@@ -11,6 +12,7 @@ const Settings = () => {
 
     const [activeTab, setActiveTab] = useState('users');
     const [selectedPermissions, setSelectedPermissions] = useState(['pos']);
+    const [selectedUserForStats, setSelectedUserForStats] = useState(null);
 
     const availablePermissions = [
         { id: 'dashboard', label: 'Tableau de Bord' },
@@ -136,12 +138,21 @@ const Settings = () => {
                                                 <p className="font-bold text-gray-900">{u.username}</p>
                                                 <p className="text-[10px] text-gray-400 uppercase font-bold">{u.role}</p>
                                             </div>
-                                            <button
-                                                onClick={() => deleteUser(u.id, u.username)}
-                                                className="p-2 text-gray-300 hover:text-red-500 rounded-lg transition-colors"
-                                            >
-                                                <Trash2 className="w-5 h-5" />
-                                            </button>
+                                            <div className="flex space-x-1">
+                                                <button
+                                                    onClick={() => setSelectedUserForStats(u)}
+                                                    className="p-2 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                                                    title="Voir les performances"
+                                                >
+                                                    <BarChart3 className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => deleteUser(u.id, u.username)}
+                                                    className="p-2 text-gray-300 hover:text-red-500 rounded-lg transition-colors"
+                                                >
+                                                    <Trash2 className="w-5 h-5" />
+                                                </button>
+                                            </div>
                                         </div>
                                         {u.username !== 'admin' && (
                                             <div className="flex flex-wrap gap-2">
@@ -313,7 +324,7 @@ const Settings = () => {
                         <Shield className="w-12 h-12 text-primary -rotate-3" />
                     </div>
                     <h2 className="text-4xl font-black text-gray-900 tracking-tight">IvoireStock Pro</h2>
-                    <div className="mt-2 px-3 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-full">Version 1.2.0</div>
+                    <div className="mt-2 px-3 py-1 bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest rounded-full">Version 1.4.0</div>
                     <p className="text-gray-500 mt-6 text-lg leading-relaxed max-w-md">
                         Solution intelligente pour la gestion commerciale en Côte d'Ivoire.
                     </p>
@@ -334,6 +345,12 @@ const Settings = () => {
                         Handcrafted with Passion by Antigravity AI
                     </div>
                 </div>
+            )}
+            {selectedUserForStats && (
+                <UserStats
+                    user={selectedUserForStats}
+                    onClose={() => setSelectedUserForStats(null)}
+                />
             )}
         </div>
     );
