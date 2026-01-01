@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { User, Lock, Key, ShieldCheck } from 'lucide-react';
-import { db } from '../db';
+import { supabase } from '../lib/supabase';
 
 const AuthPage = () => {
-    const { login, register, currentUser } = useAuth();
+    const { login, signup, session } = useAuth();
     const navigate = useNavigate();
     const [isLogin, setIsLogin] = useState(true);
     const [isAdminSetup, setIsAdminSetup] = useState(false);
@@ -13,10 +13,10 @@ const AuthPage = () => {
 
     // Redirect if already logged in
     useEffect(() => {
-        if (currentUser) {
-            navigate(currentUser.role === 'admin' ? '/' : '/pos');
+        if (session) {
+            navigate(session.role === 'admin' ? '/' : '/pos');
         }
-    }, [currentUser, navigate]);
+    }, [session, navigate]);
 
     const [formData, setFormData] = useState({
         username: '',
@@ -27,12 +27,11 @@ const AuthPage = () => {
 
     useEffect(() => {
         const checkUsers = async () => {
-            const users = await db.users.toArray();
-            // Si pas d'utilisateurs OU si l'unique utilisateur est vide (cas d'erreur)
-            if (users.length === 0 || (users.length === 1 && !users[0].username)) {
-                if (users.length === 1) {
-                    await db.users.clear(); // Nettoyer la base corrompue
-                }
+            const { count } = await supabase
+                .from('profiles')
+                .select('*', { count: 'exact', head: true });
+
+            if (count === 0) {
                 setIsAdminSetup(true);
                 setIsLogin(false);
             }
@@ -58,15 +57,16 @@ const AuthPage = () => {
                 const res = await login(username, password);
                 if (!res.success) setError(res.message);
             } else {
-                const res = await register(
-                    { username, password },
+                const res = await signup(
+                    username,
+                    password,
                     isAdminSetup ? null : formData.inviteCode
                 );
                 if (res.success) {
                     setIsLogin(true);
                     setIsAdminSetup(false);
                     setFormData({ username: '', password: '', inviteCode: '' });
-                    alert('Configuration réussie ! Connectez-vous maintenant.');
+                    alert('Inscription réussie ! Connectez-vous maintenant.');
                 } else {
                     setError(res.message);
                 }
@@ -79,13 +79,6 @@ const AuthPage = () => {
         }
     };
 
-    const handleResetDB = async () => {
-        if (window.confirm('Voulez-vous vraiment réinitialiser l\'application ? Toutes vos données seront effacées.')) {
-            await db.delete();
-            localStorage.clear();
-            window.location.href = '/auth';
-        }
-    };
 
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans flex-col space-y-6">
@@ -192,13 +185,7 @@ const AuthPage = () => {
             </div>
 
             <div className="flex flex-col items-center space-y-2 opacity-40 hover:opacity-100 transition-opacity">
-                <button
-                    onClick={handleResetDB}
-                    className="text-[10px] text-gray-400 font-bold uppercase tracking-widest hover:text-red-500 transition-colors"
-                >
-                    Réinitialiser le système
-                </button>
-                <p className="text-[10px] text-gray-400">IvoireStock v1.0.2 - Hors-ligne</p>
+                <p className="text-[10px] text-gray-400">IvoireStock v2.0.0 - Synchronisation Temps Réel</p>
             </div>
         </div>
     );

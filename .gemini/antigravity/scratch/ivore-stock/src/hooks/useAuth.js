@@ -89,16 +89,31 @@ export function useAuth() {
 
     const signup = async (username, password, inviteCode) => {
         try {
-            // Verify invite code
-            const { data: invite, error: inviteError } = await supabase
-                .from('invites')
-                .select('*')
-                .eq('code', inviteCode)
-                .eq('status', 'active')
-                .single();
+            // Check if this is the first user (admin setup)
+            const { count } = await supabase
+                .from('profiles')
+                .select('*', { count: 'exact', head: true });
 
-            if (inviteError || !invite) {
-                return { success: false, message: 'Code d\'invitation invalide' };
+            const isFirstUser = count === 0;
+
+            if (!isFirstUser && !inviteCode) {
+                return { success: false, message: 'Code d\'invitation requis' };
+            }
+
+            // Verify invite code for non-first users
+            let invite = null;
+            if (!isFirstUser) {
+                const { data: inviteData, error: inviteError } = await supabase
+                    .from('invites')
+                    .select('*')
+                    .eq('code', inviteCode)
+                    .eq('status', 'active')
+                    .single();
+
+                if (inviteError || !inviteData) {
+                    return { success: false, message: 'Code d\'invitation invalide' };
+                }
+                invite = inviteData;
             }
 
             // Create auth user
@@ -106,27 +121,41 @@ export function useAuth() {
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
                 password,
+                options: {
+                    data: {
+                        username: username
+                    }
+                }
             });
 
             if (authError) throw authError;
 
             // Create profile
+            const profileData = isFirstUser ? {
+                id: authData.user.id,
+                username,
+                role: 'admin',
+                permissions: ['dashboard', 'pos', 'inventory', 'reports', 'settings']
+            } : {
+                id: authData.user.id,
+                username,
+                role: invite.role,
+                permissions: invite.permissions
+            };
+
             const { error: profileError } = await supabase
                 .from('profiles')
-                .insert({
-                    id: authData.user.id,
-                    username,
-                    role: invite.role,
-                    permissions: invite.permissions
-                });
+                .insert(profileData);
 
             if (profileError) throw profileError;
 
-            // Mark invite as used
-            await supabase
-                .from('invites')
-                .update({ status: 'used' })
-                .eq('code', inviteCode);
+            // Mark invite as used (if not first user)
+            if (!isFirstUser) {
+                await supabase
+                    .from('invites')
+                    .update({ status: 'used' })
+                    .eq('code', inviteCode);
+            }
 
             return { success: true };
         } catch (error) {
