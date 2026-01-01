@@ -4,6 +4,7 @@ import { useSales } from '../hooks/useSales';
 import POSProductGrid from '../components/POSProductGrid';
 import POSCart from '../components/POSCart';
 import CheckoutModal from '../components/CheckoutModal';
+import Receipt from '../components/Receipt';
 
 const POS = () => {
     const { products } = useInventory();
@@ -43,6 +44,9 @@ const POS = () => {
     const clearCart = () => setCart([]);
 
     // Checkout Logic
+    const [lastSale, setLastSale] = useState(null);
+    const [showReceipt, setShowReceipt] = useState(false);
+
     const handleCheckout = async (paymentDetails) => {
         const saleData = {
             date: new Date(),
@@ -54,13 +58,15 @@ const POS = () => {
                 price: item.price
             })),
             ...paymentDetails,
-            changeGiven: paymentDetails.change || 0
+            changeGiven: paymentDetails.change || 0,
+            receivedAmount: paymentDetails.receivedAmount || 0
         };
 
         await addSale(saleData);
+        setLastSale(saleData);
         setCart([]);
         setShowCheckout(false);
-        // Optional: Show success toast/receipt
+        setShowReceipt(true);
     };
 
     const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -68,16 +74,15 @@ const POS = () => {
     return (
         <div className="flex h-[calc(100vh-theme(spacing.32))] md:h-[calc(100vh-theme(spacing.16))] -m-4 md:-m-8">
             {/* Left: Product Grid */}
-            <div className="w-full md:w-2/3 lg:w-3/4 border-r border-gray-200">
-                <POSProductGrid products={products} onAddToCart={addToCart} />
+            <div className="flex-1 overflow-hidden">
+                <POSProductGrid
+                    products={products || []}
+                    onAddToCart={addToCart}
+                />
             </div>
 
-            {/* Right: Cart (Hidden on mobile, usable via drawer/toggle - for now stack on mobile via simple responsive design, but let's stick to split view for tablet/desk, and overlay for phone??) 
-          Let's make it side-by-side on large screens, and standard flex-col on mobile?
-          The layout creates a split. On mobile, we might want the cart to be a bottom sheet or separate tab.
-          For simplicity in this step, I'll use standard grid responsive.
-      */}
-            <div className="hidden md:block w-1/3 lg:w-1/4 bg-white">
+            {/* Right: Cart */}
+            <div className="w-full md:w-96">
                 <POSCart
                     cart={cart}
                     onUpdateQuantity={updateQuantity}
@@ -87,10 +92,7 @@ const POS = () => {
                 />
             </div>
 
-            {/* Mobile Cart Floating Action (if needed) or simple toggle. 
-          For now, I'll stick to Desktop-first responsive.
-      */}
-
+            {/* Checkout Modal */}
             {showCheckout && (
                 <CheckoutModal
                     total={total}
