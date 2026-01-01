@@ -1,40 +1,108 @@
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db';
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 export function useSales() {
-    const sales = useLiveQuery(() => db.sales.orderBy('date').reverse().toArray());
+    const [sales, setSales] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [session, setSession] = useState(null);
 
-    const addSale = async (saleData) => {
-        // saleData should include: { items: [], total: 0, paymentMethod: 'cash', date: new Date() }
-
-        // Decrease stock for each item
-        await db.transaction('rw', db.products, db.sales, db.logs, async () => {
-            for (const item of saleData.items) {
-                const product = await db.products.get(item.productId);
-                if (product) {
-                    await db.products.update(item.productId, { stock: product.stock - item.quantity });
-                }
-            }
-            const session = JSON.parse(localStorage.getItem('ivoire_stock_session'));
-            const fullSaleData = {
-                ...saleData,
-                userId: session?.id,
-                username: session?.username,
-                timestamp: new Date()
-            };
-
-            await db.sales.add(fullSaleData);
-
-            if (session) {
-                await db.logs.add({
-                    userId: session.id,
-                    username: session.username,
-                    action: `Vente effectuée: ${saleData.total} FCFA`,
-                    timestamp: new Date()
+    useEffect(() => {
+        // Get session
+        supabase.auth.getSession().then(({ data: { session: authSession } }) => {
+            if (authSession?.user) {
+                fetchUserProfile(authSession.user.id).then(profile => {
+                    setSession({
+                        id: authSession.user.id,
+                        username: profile?.username,
+                        role: profile?.role
+                    });
                 });
             }
         });
+
+        // Fetch sales
+        fetchSales();
+
+        // Subscribe to realtime changes
+        const subscription = supabase
+            .channel('sales_changes')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'sales' },
+                () => {
+                    fetchSales();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, []);
+
+    const fetchUserProfile = async (userId) => {
+        const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+        return data;
     };
 
-    return { sales, addSale };
+    const fetchSales = async () => {
+        const { data, error } = await supabase
+            .from('sales')
+            .select('*')
+            .order('date', { ascending: false });
+
+        if (!error) {
+            setSales(data || []);
+        }
+        setLoading(false);
+    };
+
+    const addSale = async (saleData) => {
+        try {
+            // Decrease stock for each item
+            for (const item of saleData.items) {
+                const { data: product } = await supabase
+                    .from('products')
+                    .select('stock')
+                    .eq('id', item.productId)
+                    .single();
+
+                if (product) {
+                    await supabase
+                        .from('products')
+                        .update({ stock: product.stock - item.quantity })
+                        .eq('id', item.productId);
+                }
+            }
+
+            // Add sale
+            const { error: saleError } = await supabase
+                .from('sales')
+                .insert({
+                    ...saleData,
+                    user_id: session?.id,
+                    username: session?.username
+                });
+
+            if (saleError) throw saleError;
+
+            // Add log
+            await supabase
+                .from('logs')
+                .insert({
+                    user_id: session?.id,
+                    username: session?.username,
+                    action: `Vente effectuée: ${saleData.total} FCFA`
+                });
+
+        } catch (error) {
+            console.error('Error adding sale:', error);
+            throw error;
+        }
+    };
+
+    return { sales, loading, addSale };
 }
